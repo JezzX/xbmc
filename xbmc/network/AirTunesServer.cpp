@@ -21,6 +21,10 @@
 
 #include "AirTunesServer.h"
 
+#ifdef HAS_AIRPLAY
+#include "network/AirPlayServer.h"
+#endif
+
 #ifdef HAS_AIRTUNES
 
 #include "utils/log.h"
@@ -111,9 +115,6 @@ ao_device* CAirTunesServer::AudioOutputFunctions::ao_open_live(int driver_id, ao
   CFileItem item;
   item.SetPath(device->pipe->GetName());
   item.SetMimeType("audio/x-xbmc-pcm");
-  item.SetProperty("isradio", true);
-  item.SetProperty("no-skip", true);
-  item.SetProperty("no-pause", true);
 
   if (ao_get_option(option, "artist"))
     item.GetMusicInfoTag()->SetArtist(ao_get_option(option, "artist"));
@@ -139,8 +140,20 @@ int CAirTunesServer::AudioOutputFunctions::ao_close(ao_device *device)
   device_xbmc->pipe->Close();
   delete device_xbmc->pipe;
 
-  ThreadMessage tMsg = { TMSG_MEDIA_STOP };
-  g_application.getApplicationMessenger().SendMessage(tMsg, true);
+  //fix airplay video for ios5 devices
+  //on ios5 when airplaying video
+  //the client first opens an airtunes stream
+  //while the movie is loading
+  //in that case we don't want to stop the player here
+  //because this would stop the airplaying video
+#ifdef HAS_AIRPLAY
+  if (!CAirPlayServer::IsPlaying())
+#endif
+  {
+    ThreadMessage tMsg = { TMSG_MEDIA_STOP };
+    g_application.getApplicationMessenger().SendMessage(tMsg, true);
+    CLog::Log(LOGDEBUG, "AIRTUNES: AirPlay not running - stopping player");
+  }
 
   delete device_xbmc;
 

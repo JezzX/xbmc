@@ -80,6 +80,9 @@ bool CFile::Cache(const CStdString& strFileName, const CStdString& strDest, XFIL
 {
   CFile file;
 
+  if (strFileName.empty() || strDest.empty())
+    return false;
+
   // special case for zips - ignore caching
   CURL url(strFileName);
   if (URIUtils::IsInZIP(strFileName))
@@ -224,7 +227,7 @@ bool CFile::Open(const CStdString& strFileName, unsigned int flags)
     }
 
     CURL url(URIUtils::SubstitutePath(strFileName));
-    if ( (flags & READ_NO_CACHE) == 0 && URIUtils::IsInternetStream(url) && !CUtil::IsPicture(strFileName) )
+    if ( (flags & READ_NO_CACHE) == 0 && URIUtils::IsInternetStream(url, true) && !CUtil::IsPicture(strFileName) )
       m_flags |= READ_CACHED;
 
     if (m_flags & READ_CACHED)
@@ -358,7 +361,6 @@ bool CFile::Exists(const CStdString& strFileName, bool bUseCache /* = true */)
     }
 
     url = URIUtils::SubstitutePath(strFileName);
-
     auto_ptr<IFile> pFile(CFileFactory::CreateLoader(url));
     if (!pFile.get())
       return false;
@@ -825,8 +827,9 @@ bool CFile::SetHidden(const CStdString& fileName, bool hidden)
 int CFile::IoControl(EIoControl request, void* param)
 {
   int result = -1;
-  if (m_pFile)
-    result = m_pFile->IoControl(request, param);
+  if (m_pFile == NULL)
+    return -1;
+  result = m_pFile->IoControl(request, param);
 
   if(result == -1 && request == IOCTRL_SEEK_POSSIBLE)
   {

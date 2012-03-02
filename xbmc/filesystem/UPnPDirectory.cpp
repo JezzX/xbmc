@@ -161,12 +161,21 @@ bool CUPnPDirectory::GetResource(const CURL& path, CFileItem &item)
     CURL::Decode(object);
 
     PLT_DeviceDataReference device;
-    if(!FindDeviceWait(upnp, uuid.c_str(), device))
+    if(!FindDeviceWait(upnp, uuid.c_str(), device)) {
+        CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - unable to find uuid %s", uuid.c_str());
         return false;
+    }
 
     PLT_MediaObjectListReference list;
-    if (NPT_FAILED(upnp->m_MediaBrowser->BrowseSync(device, object.c_str(), list, true)))
+    if (NPT_FAILED(upnp->m_MediaBrowser->BrowseSync(device, object.c_str(), list, true))) {
+        CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - unable to find object %s", object.c_str());
         return false;
+    }
+
+    if (list.IsNull() || !list->GetItemCount()) {
+      CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - no items returned for object %s", object.c_str());
+      return false;
+    }
 
     PLT_MediaObjectList::Iterator entry = list->GetFirstItem();
     if (entry == 0)
@@ -180,8 +189,10 @@ bool CUPnPDirectory::GetResource(const CURL& path, CFileItem &item)
                       CProtocolFinder("xbmc-get"), resource))) {
         if((*entry)->m_Resources.GetItemCount())
             resource = (*entry)->m_Resources[0];
-        else
+        else {
+            CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - no resources returned for object %s", object.c_str());
             return false;
+        }
     }
 
     // store original path so we remember it
@@ -383,12 +394,10 @@ CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
 
             CStdString id = (char*) (*entry)->m_ObjectID;
             CURL::Encode(id);
-            pItem->SetPath(CStdString((const char*) "upnp://" + uuid + "/" + id.c_str() + "/"));
+            pItem->SetPath(CStdString((const char*) "upnp://" + uuid + "/" + id.c_str()));
 
             // if it's a container, format a string as upnp://uuid/object_id
             if (pItem->m_bIsFolder) {
-                CStdString id = (char*) (*entry)->m_ObjectID;
-                CURL::Encode(id);
                 pItem->SetPath(pItem->GetPath() + "/");
 
                 // look for metadata

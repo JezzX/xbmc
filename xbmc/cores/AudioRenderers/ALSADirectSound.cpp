@@ -396,11 +396,19 @@ bool CALSADirectSound::Resume()
   if(state == SND_PCM_STATE_PAUSED)
     snd_pcm_pause(m_pPlayHandle,0);
 
-  if(state == SND_PCM_STATE_PREPARED)
+  else if(state == SND_PCM_STATE_PREPARED)
   {
     snd_pcm_sframes_t avail = snd_pcm_avail_update(m_pPlayHandle);
     if(avail >= 0 && avail < (snd_pcm_sframes_t)m_uiBufferSize)
       snd_pcm_start(m_pPlayHandle);
+  }
+  else if(state == SND_PCM_STATE_RUNNING)
+  {}
+  else
+  {
+    CLog::Log(LOGWARNING, "CALSADirectSound::Resume - unexpected device state %d flushing", state);
+    Flush();
+    snd_pcm_start(m_pPlayHandle);
   }
 
   m_bPause = false;
@@ -644,19 +652,11 @@ void CALSADirectSound::EnumerateAudioSinks(AudioSinkList& vAudioSinks, bool pass
     vAudioSinks.push_back(AudioSink("hdmi (ALSA)"   , "alsa:hdmi"));
   }
 
-  int n_cards = -1;
-  int numberCards = 0;
-  while ( snd_card_next( &n_cards ) == 0 && n_cards >= 0 )
-    numberCards++;
-
-  if (numberCards <= 1)
-    return;
-
   snd_ctl_t *handle;
   snd_ctl_card_info_t *info;
   snd_ctl_card_info_alloca( &info );
   CStdString strHwName;
-  n_cards = -1;
+  int n_cards = -1;
 
   while ( snd_card_next( &n_cards ) == 0 && n_cards >= 0 )
   {
@@ -668,10 +668,14 @@ void CALSADirectSound::EnumerateAudioSinks(AudioSinkList& vAudioSinks, bool pass
         CStdString strReadableCardName = snd_ctl_card_info_get_name( info );
         CStdString strCardName = snd_ctl_card_info_get_id( info );
 
-        if (!passthrough)
-          GenSoundLabel(vAudioSinks, g_localizeStrings.Get(409), strCardName, strReadableCardName);
-        GenSoundLabel(vAudioSinks, "iec958", strCardName, strReadableCardName);
-        GenSoundLabel(vAudioSinks, "hdmi", strCardName, strReadableCardName);
+        int dev = -1;
+        while( snd_ctl_pcm_next_device( handle, &dev ) == 0 && dev >= 0 )
+        {
+          if (!passthrough)
+            GenSoundLabel(vAudioSinks, "default", strCardName, dev, strReadableCardName);
+          GenSoundLabel(vAudioSinks, "iec958", strCardName, dev, strReadableCardName);
+          GenSoundLabel(vAudioSinks, "hdmi", strCardName, dev, strReadableCardName);
+        }
       }
       else
         CLog::Log(LOGERROR,"((ALSAENUM))control hardware info (%i): failed.\n", n_cards );
@@ -682,41 +686,14 @@ void CALSADirectSound::EnumerateAudioSinks(AudioSinkList& vAudioSinks, bool pass
   }
 }
 
-bool CALSADirectSound::SoundDeviceExists(const CStdString& device)
-{
-  void **hints, **n;
-  char *name;
-  bool retval = false;
-
-  if (snd_device_name_hint(-1, "pcm", &hints) == 0)
-  {
-    for (n = hints; *n; n++)
-    {
-      if ((name = snd_device_name_get_hint(*n, "NAME")) != NULL)
-      {
-        CStdString strName = name;
-        free(name);
-        if (strName.find(device) != string::npos)
-        {
-          retval = true;
-          break;
-        }
-      }
-    }
-    snd_device_name_free_hint(hints);
-  }
-  return retval;
-}
-
-void CALSADirectSound::GenSoundLabel(AudioSinkList& vAudioSinks, CStdString sink, CStdString card, CStdString readableCard)
+void CALSADirectSound::GenSoundLabel(AudioSinkList& vAudioSinks, CStdString sink, CStdString card, int dev, CStdString readableCard)
 {
   CStdString deviceString;
-  deviceString.Format("%s:CARD=%s", sink, card.c_str());
-  if (sink.Equals(g_localizeStrings.Get(409)) || SoundDeviceExists(deviceString.c_str()))
-  {
-    CStdString finalSink;
-    finalSink.Format("alsa:%s", deviceString.c_str());
-    CStdString label = readableCard + " " + sink + " (ALSA)";
-    vAudioSinks.push_back(AudioSink(label, finalSink));
-  }
+  deviceString.Format("%s:CARD=%s,DEV=%d", sink, card.c_str(), dev);
+
+  CStdString finalSink;
+  finalSink.Format("alsa:%s", deviceString.c_str());
+  CStdString label;
+  label.Format("%s - %s - %d (ALSA)", readableCard.c_str(), sink.c_str(), dev);
+  vAudioSinks.push_back(AudioSink(label, finalSink));
 }

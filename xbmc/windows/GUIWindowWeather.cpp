@@ -145,13 +145,21 @@ void CGUIWindowWeather::UpdateLocations()
 {
   if (!IsActive()) return;
   m_maxLocation = strtol(GetProperty("Locations").asString().c_str(),0,10);
-
+  if (m_maxLocation < 1) return;
   CGUIMessage msg(GUI_MSG_LABEL_RESET,GetID(),CONTROL_SELECTLOCATION);
   g_windowManager.SendMessage(msg);
   CGUIMessage msg2(GUI_MSG_LABEL_ADD,GetID(),CONTROL_SELECTLOCATION);
 
   unsigned int iCurWeather = g_weatherManager.GetArea();
 
+  if (iCurWeather > m_maxLocation)
+  {  
+    g_weatherManager.SetArea(m_maxLocation);
+    iCurWeather = m_maxLocation;
+    ClearProperties();
+    g_weatherManager.Refresh();
+  }
+  
   for (unsigned int i = 1; i <= m_maxLocation; i++)
   {
     CStdString strLabel = g_weatherManager.GetLocation(i);
@@ -240,6 +248,7 @@ void CGUIWindowWeather::SetLocation(int loc)
   // Avoid a settings write if old location == new location
   if (g_weatherManager.GetArea() != loc)
   {
+    ClearProperties();
     g_weatherManager.SetArea(loc);
     CStdString strLabel = g_weatherManager.GetLocation(loc);
     int iPos = strLabel.ReverseFind(", ");
@@ -283,5 +292,35 @@ void CGUIWindowWeather::SetProperties()
     fanartcode = URIUtils::GetFileName(g_weatherManager.GetForecast(i).m_icon);
     URIUtils::RemoveExtension(fanartcode);
     SetProperty(day + "FanartCode", fanartcode);
+  }
+}
+
+void CGUIWindowWeather::ClearProperties()
+{
+  // Current weather
+  SetProperty("Location", "");
+  SetProperty("LocationIndex", "");
+  SetProperty("Updated", "");
+  SetProperty("Current.ConditionIcon", "");
+  SetProperty("Current.Condition", "");
+  SetProperty("Current.Temperature", "");
+  SetProperty("Current.FeelsLike", "");
+  SetProperty("Current.UVIndex", "");
+  SetProperty("Current.Wind", "");
+  SetProperty("Current.DewPoint", "");
+  SetProperty("Current.Humidity", "");
+  SetProperty("Current.FanartCode", "");
+  
+  // Future weather
+  CStdString day;
+  for (int i = 0; i < NUM_DAYS; i++)
+  {
+    day.Format("Day%i.", i);
+    SetProperty(day + "Title", "");
+    SetProperty(day + "HighTemp", "");
+    SetProperty(day + "LowTemp", "");
+    SetProperty(day + "Outlook", "");
+    SetProperty(day + "OutlookIcon", "");
+    SetProperty(day + "FanartCode", "");
   }
 }

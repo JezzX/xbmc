@@ -520,7 +520,7 @@ int CBuiltins::Execute(const CStdString& execString)
         askToResume = false;
       }
       else if (params[i].Left(11).Equals("playoffset="))
-        item.SetProperty("playlist_starting_track", params[i].Mid(11) - 1);
+        item.SetProperty("playlist_starting_track", atoi(params[i].Mid(11)) - 1);
     }
 
     if (!item.m_bIsFolder && item.IsPlugin())
@@ -824,7 +824,14 @@ int CBuiltins::Execute(const CStdString& execString)
   }
   else if (execute.Equals("setvolume"))
   {
-    g_application.SetVolume(atoi(parameter.c_str()));
+    int oldVolume = g_application.GetVolume();
+    int volume = atoi(parameter.c_str());
+
+    g_application.SetVolume(volume);   
+    if(oldVolume != volume)
+    {
+      g_application.getApplicationMessenger().ShowVolumeBar(oldVolume < volume);  
+    }
   }
   else if (execute.Equals("playlist.playoffset"))
   {
@@ -941,7 +948,7 @@ int CBuiltins::Execute(const CStdString& execString)
     bool restart = false;
     if (params.size() > 0 && params[0].CompareNoCase("restart") == 0)
       restart = true;
-    CAutorun::PlayDisc(g_mediaManager.GetDiscPath(), restart);
+    CAutorun::PlayDisc(g_mediaManager.GetDiscPath(), true, restart);
 #endif
   }
   else if (execute.Equals("ripcd"))

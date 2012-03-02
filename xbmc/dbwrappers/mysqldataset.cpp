@@ -258,7 +258,7 @@ int MysqlDatabase::copy(const char *backup_name) {
               backup_name, row[0], row[0]);
 
       if ( (ret=query_with_reconnect(sql)) != MYSQL_OK )
-        throw DbErrors("Can't copy data for table '%s'\nError: %s", db.c_str(), ret);
+        throw DbErrors("Can't copy data for table '%s'\nError: %s", row[0], ret);
     }
   }
 
@@ -269,8 +269,9 @@ int MysqlDatabase::query_with_reconnect(const char* query) {
   int attempts = 5;
   int result;
 
-  // try to reconnect if server is gone (up to 3 times)
-  while ( ((result = mysql_real_query(conn, query, strlen(query))) == CR_SERVER_GONE_ERROR) &&
+  // try to reconnect if server is gone
+  while ( ((result = mysql_real_query(conn, query, strlen(query))) != MYSQL_OK) &&
+          ((result = mysql_errno(conn)) == CR_SERVER_GONE_ERROR) && 
           (attempts-- > 0) )
   {
     CLog::Log(LOGINFO,"MYSQL server has gone. Will try %d more attempt(s) to reconnect.", attempts);
@@ -278,11 +279,6 @@ int MysqlDatabase::query_with_reconnect(const char* query) {
     connect(true);
   }
 
-  // grab the latest error if not ok
-  if (result != MYSQL_OK)
-    result = mysql_errno(conn);
-
-  // set the error return string and return
   return result;
 }
 
@@ -1202,9 +1198,9 @@ MYSQL* MysqlDataset::handle(){
 void MysqlDataset::make_query(StringList &_sql) {
   string query;
   int result = 0;
+  if (db == NULL) throw DbErrors("No Database Connection");
   try
   {
-    if (db == NULL) throw DbErrors("No Database Connection");
     if (autocommit) db->start_transaction();
 
     for (list<string>::iterator i =_sql.begin(); i!=_sql.end(); i++)

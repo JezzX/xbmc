@@ -104,15 +104,16 @@ class CCoreAudioMixMap
 {
 public:
   CCoreAudioMixMap();
-  CCoreAudioMixMap(AudioChannelLayout& inLayout, AudioChannelLayout& outLayout);
+  CCoreAudioMixMap(AudioChannelLayout& inLayout, AudioChannelLayout& outLayout, bool forceExplicit=false);
   virtual ~CCoreAudioMixMap();
   operator Float32*() const {return m_pMap;} 
   const Float32* GetBuffer() {return m_pMap;}
   UInt32 GetInputChannels() {return m_inChannels;}
   UInt32 GetOutputChannels() {return m_outChannels;}  
   bool IsValid() {return m_isValid;}
-  void Rebuild(AudioChannelLayout& inLayout, AudioChannelLayout& outLayout);
+  void Rebuild(AudioChannelLayout& inLayout, AudioChannelLayout& outLayout, bool forceExplicit=false);
 private:
+  bool BuildExplicit(AudioChannelLayout& inLayout, AudioChannelLayout& outLayout);
   Float32* m_pMap;
   UInt32 m_inChannels;
   UInt32 m_outChannels;
@@ -128,6 +129,7 @@ public:
   virtual float GetDelay();
   virtual bool Initialize(IAudioCallback* pCallback, const CStdString& device, int iChannels, enum PCMChannels *channelMap, unsigned int uiSamplesPerSec, unsigned int uiBitsPerSample, bool bResample, bool bIsMusic=false, EEncoded encoded = IAudioRenderer::ENCODED_NONE);
   virtual bool Deinitialize();
+          bool Reinitialize();
   virtual unsigned int AddPackets(const void* data, unsigned int len);
   virtual unsigned int GetSpace();
   virtual float GetCacheTime();
@@ -163,8 +165,10 @@ private:
   bool InitializePCM(UInt32 channels, UInt32 samplesPerSecond, UInt32 bitsPerSample, enum PCMChannels *channelMap, bool allowMixing = true);
   bool InitializePCMEncoded(UInt32 sampleRate);
   
-  bool CreateMixMap();
-  
+  AudioChannelLayoutTag GetDefaultLayout(UInt32 channelCount);
+  static OSStatus HardwareListenerProc(AudioHardwarePropertyID property, void *clientref);
+  static OSStatus DeviceListenerProc(AudioDeviceID inDevice, UInt32 inChannel, Boolean isInput, AudioDevicePropertyID inPropertyID, void *clientref);
+
   bool m_Pause;
   bool m_Initialized; // Prevent multiple init/deinit
   
@@ -198,7 +202,23 @@ private:
   // Thread synchronization
   CEvent m_RunoutEvent;
   long m_DoRunout;
-  bool m_silence;
+  // saved Initialize vars
+  struct init_state
+  {
+    bool              reinit;
+    CStdString        device;
+    int               iChannels;
+    enum PCMChannels *channelMap;
+    unsigned int      uiSamplesPerSec;
+    unsigned int      uiBitsPerSample;
+    bool              bResample;
+    bool              bIsMusic;
+    EEncoded          bPassthrough;
+    IAudioCallback   *pCallback;
+  };
+  CCriticalSection m_init_csection;
+  init_state m_init_state;
+
 };
 
 #endif

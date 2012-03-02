@@ -103,6 +103,7 @@ CXBMCRenderManager::CXBMCRenderManager()
   m_presentmethod = PRESENT_METHOD_SINGLE;
   m_bReconfigured = false;
   m_hasCaptures = false;
+  m_displayLatency = 0.0f;
 }
 
 CXBMCRenderManager::~CXBMCRenderManager()
@@ -319,6 +320,8 @@ unsigned int CXBMCRenderManager::PreInit()
     m_pRenderer = new CLinuxRenderer();
 #endif
   }
+
+  UpdateDisplayLatency();
 
   return m_pRenderer->PreInit();
 }
@@ -540,9 +543,7 @@ void CXBMCRenderManager::FlipPage(volatile bool& bStop, double timestamp /* = 0L
     m_presentstep  = PRESENT_FLIP;
     m_presentsource = source;
     EDEINTERLACEMODE deinterlacemode = g_settings.m_currentVideoSettings.m_DeinterlaceMode;
-    EINTERLACEMETHOD interlacemethod = g_settings.m_currentVideoSettings.m_InterlaceMethod;
-    if (interlacemethod == VS_INTERLACEMETHOD_AUTO)
-      interlacemethod = m_pRenderer->AutoInterlaceMethod();
+    EINTERLACEMETHOD interlacemethod = AutoInterlaceMethodInternal(g_settings.m_currentVideoSettings.m_InterlaceMethod);
 
     bool invert = false;
 
@@ -714,6 +715,17 @@ void CXBMCRenderManager::Recover()
 #if defined(HAS_GL) && !defined(TARGET_DARWIN)
   glFlush(); // attempt to have gpu done with pixmap and vdpau
 #endif
+
+  UpdateDisplayLatency();
+}
+
+void CXBMCRenderManager::UpdateDisplayLatency()
+{
+  float refresh = g_graphicsContext.GetFPS();
+  if (g_graphicsContext.GetVideoResolution() == RES_WINDOW)
+    refresh = 0; // No idea about refresh rate when windowed, just get the default latency
+  m_displayLatency = (double) g_advancedSettings.GetDisplayLatency(refresh);
+  CLog::Log(LOGDEBUG, "CRenderManager::UpdateDisplayLatency - Latency set to %1.0f msec", m_displayLatency * 1000.0f);
 }
 
 void CXBMCRenderManager::UpdateResolution()
@@ -782,4 +794,18 @@ int CXBMCRenderManager::AddVideoPicture(DVDVideoPicture& pic)
   m_pRenderer->ReleaseImage(index, false);
 
   return index;
+}
+
+EINTERLACEMETHOD CXBMCRenderManager::AutoInterlaceMethodInternal(EINTERLACEMETHOD mInt)
+{
+  if (mInt == VS_INTERLACEMETHOD_NONE)
+    return VS_INTERLACEMETHOD_NONE;
+
+  if(!m_pRenderer->Supports(mInt))
+    mInt = VS_INTERLACEMETHOD_AUTO;
+
+  if (mInt == VS_INTERLACEMETHOD_AUTO)
+    return m_pRenderer->AutoInterlaceMethod();
+
+  return mInt;
 }

@@ -55,7 +55,7 @@ JSON_STATUS CAudioLibrary::GetArtists(const CStdString &method, ITransportLayer 
     albumArtistsOnly = parameterObject["albumartistsonly"].asBoolean();
 
   CFileItemList items;
-  if (musicdatabase.GetArtistsNav("", items, genreID, albumArtistsOnly))
+  if (musicdatabase.GetArtistsNav("musicdb://2/", items, genreID, albumArtistsOnly))
     HandleFileItemList("artistid", false, "artists", items, param, result);
 
   musicdatabase.Close();
@@ -98,7 +98,7 @@ JSON_STATUS CAudioLibrary::GetAlbums(const CStdString &method, ITransportLayer *
   int genreID   = (int)parameterObject["genreid"].asInteger();
 
   CFileItemList items;
-  if (musicdatabase.GetAlbumsNav("", items, genreID, artistID, -1, -1))
+  if (musicdatabase.GetAlbumsNav("musicdb://3/", items, genreID, artistID, -1, -1))
     HandleFileItemList("albumid", false, "albums", items, parameterObject, result);
 
   musicdatabase.Close();
@@ -142,7 +142,7 @@ JSON_STATUS CAudioLibrary::GetSongs(const CStdString &method, ITransportLayer *t
   int genreID  = (int)parameterObject["genreid"].asInteger();
 
   CFileItemList items;
-  if (musicdatabase.GetSongsNav("", items, genreID, artistID, albumID))
+  if (musicdatabase.GetSongsNav("musicdb://4/", items, genreID, artistID, albumID))
     HandleFileItemList("songid", true, "songs", items, parameterObject, result);
 
   musicdatabase.Close();
@@ -223,7 +223,7 @@ JSON_STATUS CAudioLibrary::GetGenres(const CStdString &method, ITransportLayer *
     return InternalError;
 
   CFileItemList items;
-  if (musicdatabase.GetGenresNav("", items))
+  if (musicdatabase.GetGenresNav("musicdb://1/", items))
   {
     /* need to set strTitle in each item*/
     for (unsigned int i = 0; i < (unsigned int)items.Size(); i++)
@@ -266,13 +266,27 @@ bool CAudioLibrary::FillFileItem(const CStdString &strFilename, CFileItem &item)
 {
   CMusicDatabase musicdatabase;
   bool status = false;
-  if (!strFilename.empty() && !CDirectory::Exists(strFilename) && musicdatabase.Open())
+  if (!strFilename.empty() && musicdatabase.Open())
   {
-    CSong song;
-    if (musicdatabase.GetSongByFileName(strFilename, song))
+    if (CDirectory::Exists(strFilename))
     {
-      item = CFileItem(song);
-      status = true;
+      CAlbum album;
+      int albumid = musicdatabase.GetAlbumIdByPath(strFilename);
+      if (musicdatabase.GetAlbumInfo(albumid, album, NULL))
+      {
+        item = CFileItem(strFilename, album);
+        item.SetMusicThumb();
+        status = true;
+      }
+    }
+    else
+    {
+      CSong song;
+      if (musicdatabase.GetSongByFileName(strFilename, song))
+      {
+        item = CFileItem(song);
+        status = true;
+      }
     }
 
     musicdatabase.Close();
@@ -315,6 +329,22 @@ bool CAudioLibrary::FillFileItemList(const CVariant &parameterObject, CFileItemL
     }
 
     musicdatabase.Close();
+
+    if (success)
+    {
+      // If we retrieved the list of songs by "artistid"
+      // we sort by album (and implicitly by track number)
+      if (artistID != -1)
+        list.Sort(SORT_METHOD_ALBUM_IGNORE_THE, SORT_ORDER_ASC);
+      // If we retrieve the list of songs by "genreid"
+      // we sort by artist (and implicitly by album and track number)
+      else if (genreID != -1)
+        list.Sort(SORT_METHOD_ARTIST_IGNORE_THE, SORT_ORDER_ASC);
+      // otherwise we sort by track number
+      else
+        list.Sort(SORT_METHOD_TRACKNUM, SORT_ORDER_ASC);
+
+    }
   }
 
   return success;

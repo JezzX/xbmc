@@ -361,7 +361,12 @@ CStdString URIUtils::SubstitutePath(const CStdString& strPath)
       i != g_advancedSettings.m_pathSubstitutions.end(); i++)
   {
     if (strncmp(strPath.c_str(), i->first.c_str(), i->first.size()) == 0)
-      return URIUtils::AddFileToFolder(i->second, strPath.Mid(i->first.size()));
+    {
+      if (strPath.size() > i->first.size())
+        return URIUtils::AddFileToFolder(i->second, strPath.Mid(i->first.size()));
+      else
+        return i->second;
+    }
   }
   return strPath;
 }
@@ -403,9 +408,6 @@ bool URIUtils::IsOnDVD(const CStdString& strFile)
 #ifdef _WIN32
   if (strFile.Mid(1,1) == ":")
     return (GetDriveType(strFile.Left(2)) == DRIVE_CDROM);
-#else
-  if (strFile.Left(2).CompareNoCase("d:") == 0)
-    return true;
 #endif
 
   if (strFile.Left(4).CompareNoCase("dvd:") == 0)
@@ -447,7 +449,7 @@ bool URIUtils::IsOnLAN(const CStdString& strPath)
     return true;
 
   CURL url(strPath);
-  if(IsInArchive(strPath))
+  if (url.GetProtocol() == "rar" || url.GetProtocol() == "zip")
     return IsOnLAN(url.GetHostName());
 
   if(!IsRemote(strPath))
@@ -506,6 +508,11 @@ bool URIUtils::IsHD(const CStdString& strFileName)
 
 bool URIUtils::IsDVD(const CStdString& strFile)
 {
+  CStdString strFileLow = strFile;
+  strFileLow.MakeLower();
+  if (strFileLow.Find("video_ts.ifo") != -1 && IsOnDVD(strFile))
+    return true;
+
 #if defined(_WIN32)
   if (strFile.Left(6).Equals("dvd://"))
     return true;
@@ -517,9 +524,7 @@ bool URIUtils::IsDVD(const CStdString& strFile)
   if(GetDriveType(strFile.c_str()) == DRIVE_CDROM)
     return true;
 #else
-  CStdString strFileLow = strFile;
-  strFileLow.MakeLower();
-  if (strFileLow == "d:/"  || strFileLow == "d:\\"  || strFileLow == "d:" || strFileLow == "iso9660://" || strFileLow == "udf://" || strFileLow == "dvd://1" )
+  if (strFileLow == "iso9660://" || strFileLow == "udf://" || strFileLow == "dvd://1" )
     return true;
 #endif
 
